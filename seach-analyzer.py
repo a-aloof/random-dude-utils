@@ -34,28 +34,30 @@ if uploaded_files:
     data = {}
     for file in uploaded_files:
         filename = file.name.lower()
-        if 'query' in filename:
-            queries = pd.read_csv(file)
-            if 'ctr' in queries.columns:
-                queries['ctr'] = queries['ctr'].str.rstrip('%').astype(float)
-            if 'position' in queries.columns:
-                queries['position'] = pd.to_numeric(queries['position'], errors='coerce')
-            data['queries'] = queries
-        elif 'page' in filename:
-            pages = pd.read_csv(file)
-            if 'ctr' in pages.columns:
-                pages['ctr'] = pages['ctr'].str.rstrip('%').astype(float)
-            if 'position' in pages.columns:
-                pages['position'] = pd.to_numeric(pages['position'], errors='coerce')
-            data['pages'] = pages
-        elif 'country' in filename:
-            data['countries'] = pd.read_csv(file)
-        elif 'device' in filename:
-            data['devices'] = pd.read_csv(file)
-        elif 'date' in filename:
-            data['dates'] = pd.read_csv(file)
-        elif 'search appearance' in filename:
-            data['search_appearance'] = pd.read_csv(file)
+        try:
+            df = pd.read_csv(file)
+            if 'query' in filename:
+                if 'ctr' in df.columns:
+                    df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
+                if 'position' in df.columns:
+                    df['position'] = pd.to_numeric(df['position'], errors='coerce')
+                data['queries'] = df
+            elif 'page' in filename:
+                if 'ctr' in df.columns:
+                    df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
+                if 'position' in df.columns:
+                    df['position'] = pd.to_numeric(df['position'], errors='coerce')
+                data['pages'] = df
+            elif 'country' in filename:
+                data['countries'] = df
+            elif 'device' in filename:
+                data['devices'] = df
+            elif 'date' in filename:
+                data['dates'] = df
+            elif 'search appearance' in filename:
+                data['search_appearance'] = df
+        except Exception as e:
+            st.warning(f"❌ Failed to load {file.name}: {e}")
 
     if 'queries' in data:
         queries = data['queries']
@@ -89,8 +91,11 @@ if uploaded_files:
 
     if show_devices and 'devices' in data:
         st.header("🖥️ Device Performance")
-        fig = px.pie(data['devices'], names='device', values='clicks', title="Clicks by Device")
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            fig = px.pie(data['devices'], names='device', values='clicks', title="Clicks by Device")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Error rendering device pie chart: {e}")
 
     if show_countries and 'countries' in data:
         st.header("🌍 Top Countries")
