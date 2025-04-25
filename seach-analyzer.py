@@ -1,5 +1,3 @@
-# Final version - GSC Full Search Analyzer
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -32,20 +30,32 @@ Upload the following CSVs exported from Google Search Console:
 
 uploaded_files = st.file_uploader("Upload your GSC CSV files", type=['csv'], accept_multiple_files=True)
 
+REQUIRED_QUERY_COLUMNS = ['query', 'clicks', 'impressions', 'ctr', 'position']
+
+def normalize_columns(df):
+    df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
+    return df
+
+def has_required_columns(df, required):
+    return all(col in df.columns for col in required)
+
 if uploaded_files:
     data = {}
     for file in uploaded_files:
         filename = file.name.lower()
         try:
             df = pd.read_csv(file)
-            df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]  # Normalize headers
+            df = normalize_columns(df)
 
             if 'query' in filename:
                 if 'ctr' in df.columns:
                     df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
                 if 'position' in df.columns:
                     df['position'] = pd.to_numeric(df['position'], errors='coerce')
-                data['queries'] = df
+                if has_required_columns(df, REQUIRED_QUERY_COLUMNS):
+                    data['queries'] = df
+                else:
+                    st.warning("⚠️ 'Queries.csv' uploaded but does not contain required columns: 'query', 'clicks', 'impressions', 'ctr', 'position'")
 
             elif 'page' in filename:
                 if 'ctr' in df.columns:
