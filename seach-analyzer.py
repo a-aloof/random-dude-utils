@@ -1,3 +1,5 @@
+# Final version - GSC Full Search Analyzer
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -91,29 +93,32 @@ if uploaded_files:
 
     if show_queries and 'queries' in data:
         st.header("🔎 Top Queries")
-        top_queries = queries.sort_values(by='clicks', ascending=False).head(20)
-        st.dataframe(top_queries)
+        try:
+            top_queries = queries.sort_values(by='clicks', ascending=False).head(20)
+            st.dataframe(top_queries)
 
-        st.subheader("CTR vs Position Scatter Plot")
-        fig = px.scatter(queries, x="position", y="ctr", size="impressions", hover_data=["query"], title="CTR vs Position")
-        st.plotly_chart(fig, use_container_width=True)
+            st.subheader("CTR vs Position Scatter Plot")
+            fig = px.scatter(queries, x="position", y="ctr", size="impressions", hover_data=["query"], title="CTR vs Position")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Error rendering Top Queries chart: {e}")
 
     if show_opportunities and 'queries' in data:
         st.subheader("🎯 Opportunity Queries (High Impressions, Low CTR)")
-        opportunity = queries[(queries['impressions'] > queries['impressions'].quantile(0.75)) & (queries['ctr'] < queries['ctr'].median())]
-        st.dataframe(opportunity.sort_values(by='impressions', ascending=False))
+        try:
+            opportunity = queries[(queries['impressions'] > queries['impressions'].quantile(0.75)) & (queries['ctr'] < queries['ctr'].median())]
+            st.dataframe(opportunity.sort_values(by='impressions', ascending=False))
+        except Exception as e:
+            st.warning(f"Error rendering Opportunity Queries: {e}")
 
     if show_devices and 'devices' in data:
         st.header("🖥️ Device Performance")
         try:
             devices = data['devices']
-            if 'device' in devices.columns and 'clicks' in devices.columns:
-                fig = px.pie(devices, names='device', values='clicks', title="Clicks by Device")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning("Devices file missing required columns.")
+            fig = px.pie(devices, names='device', values='clicks', title="Clicks by Device")
+            st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.warning(f"Error rendering device pie chart: {e}")
+            st.warning(f"Error rendering Device Performance chart: {e}")
 
     if show_countries and 'countries' in data:
         st.header("🌍 Top Countries")
@@ -123,7 +128,7 @@ if uploaded_files:
                          x='country', y='clicks', title="Top Countries by Clicks")
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.warning(f"Error rendering countries bar chart: {e}")
+            st.warning(f"Error rendering Countries chart: {e}")
 
     if show_dates and 'dates' in data:
         st.header("🗓️ Clicks & Impressions Over Time")
@@ -132,16 +137,16 @@ if uploaded_files:
             fig = px.line(dates, x='date', y=['clicks', 'impressions'], title="Performance Over Time")
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.warning(f"Error rendering time series chart: {e}")
+            st.warning(f"Error rendering Time Series chart: {e}")
 
     if show_search_appearance and 'search_appearance' in data:
         st.header("🔎 Search Appearance Analysis")
         try:
             appearance = data['search_appearance']
-            fig = px.bar(appearance, x='searchappearance', y='clicks', title="Clicks by Search Appearance")
+            fig = px.bar(appearance, x='search_appearance', y='clicks', title="Clicks by Search Appearance")
             st.plotly_chart(fig, use_container_width=True)
         except Exception as e:
-            st.warning(f"Error rendering search appearance chart: {e}")
+            st.warning(f"Error rendering Search Appearance chart: {e}")
 
     if show_clusters and 'queries' in data:
         st.header("🧠 Keyword Clustering (KMeans + TF-IDF)")
