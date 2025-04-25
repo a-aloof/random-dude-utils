@@ -36,26 +36,40 @@ if uploaded_files:
         filename = file.name.lower()
         try:
             df = pd.read_csv(file)
+            df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]  # Normalize headers
+
             if 'query' in filename:
                 if 'ctr' in df.columns:
                     df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
                 if 'position' in df.columns:
                     df['position'] = pd.to_numeric(df['position'], errors='coerce')
                 data['queries'] = df
+
             elif 'page' in filename:
                 if 'ctr' in df.columns:
                     df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
                 if 'position' in df.columns:
                     df['position'] = pd.to_numeric(df['position'], errors='coerce')
                 data['pages'] = df
+
             elif 'country' in filename:
                 data['countries'] = df
+
             elif 'device' in filename:
                 data['devices'] = df
+
             elif 'date' in filename:
+                if 'date' in df.columns:
+                    df['date'] = pd.to_datetime(df['date'], errors='coerce')
+                if 'clicks' in df.columns:
+                    df['clicks'] = pd.to_numeric(df['clicks'], errors='coerce')
+                if 'impressions' in df.columns:
+                    df['impressions'] = pd.to_numeric(df['impressions'], errors='coerce')
                 data['dates'] = df
+
             elif 'search appearance' in filename:
                 data['search_appearance'] = df
+
         except Exception as e:
             st.warning(f"❌ Failed to load {file.name}: {e}")
 
@@ -92,27 +106,42 @@ if uploaded_files:
     if show_devices and 'devices' in data:
         st.header("🖥️ Device Performance")
         try:
-            fig = px.pie(data['devices'], names='device', values='clicks', title="Clicks by Device")
-            st.plotly_chart(fig, use_container_width=True)
+            devices = data['devices']
+            if 'device' in devices.columns and 'clicks' in devices.columns:
+                fig = px.pie(devices, names='device', values='clicks', title="Clicks by Device")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Devices file missing required columns.")
         except Exception as e:
             st.warning(f"Error rendering device pie chart: {e}")
 
     if show_countries and 'countries' in data:
         st.header("🌍 Top Countries")
-        fig = px.bar(data['countries'].sort_values(by='clicks', ascending=False).head(10),
-                     x='country', y='clicks', title="Top Countries by Clicks")
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            countries = data['countries']
+            fig = px.bar(countries.sort_values(by='clicks', ascending=False).head(10),
+                         x='country', y='clicks', title="Top Countries by Clicks")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Error rendering countries bar chart: {e}")
 
     if show_dates and 'dates' in data:
         st.header("🗓️ Clicks & Impressions Over Time")
-        dates = data['dates']
-        fig = px.line(dates, x='date', y=['clicks', 'impressions'], title="Performance Over Time")
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            dates = data['dates']
+            fig = px.line(dates, x='date', y=['clicks', 'impressions'], title="Performance Over Time")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Error rendering time series chart: {e}")
 
     if show_search_appearance and 'search_appearance' in data:
         st.header("🔎 Search Appearance Analysis")
-        fig = px.bar(data['search_appearance'], x='searchAppearance', y='clicks', title="Clicks by Search Appearance")
-        st.plotly_chart(fig, use_container_width=True)
+        try:
+            appearance = data['search_appearance']
+            fig = px.bar(appearance, x='searchappearance', y='clicks', title="Clicks by Search Appearance")
+            st.plotly_chart(fig, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Error rendering search appearance chart: {e}")
 
     if show_clusters and 'queries' in data:
         st.header("🧠 Keyword Clustering (KMeans + TF-IDF)")
