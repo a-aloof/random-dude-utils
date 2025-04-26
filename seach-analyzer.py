@@ -5,9 +5,9 @@ from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 st.set_page_config(page_title="🔍 GSC Search Analyzer", layout="wide")
-
 st.title("🔍 Google Search Console Full Analyzer")
 
+# Sidebar toggles
 st.sidebar.title("📊 Report Sections")
 show_queries = st.sidebar.checkbox("Top Queries & CTR Scatter", value=True)
 show_opportunities = st.sidebar.checkbox("Opportunity Queries", value=True)
@@ -30,25 +30,21 @@ Upload the following CSVs exported from Google Search Console:
 
 uploaded_files = st.file_uploader("Upload your GSC CSV files", type=['csv'], accept_multiple_files=True)
 
+# Columns expected
 REQUIRED_QUERY_COLUMNS = ['query', 'clicks', 'impressions', 'ctr', 'position']
 COLUMN_RENAME_MAP = {
     'top queries': 'query',
+    'search term': 'query',
     'clicks': 'clicks',
     'impressions': 'impressions',
     'ctr': 'ctr',
     'position': 'position'
 }
 
-def normalize_columns(df):
-    df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
-    return df
-
-def rename_query_columns(df):
+def fix_query_file(df):
     df.columns = [col.strip().lower() for col in df.columns]
-    return df.rename(columns={k: v for k, v in COLUMN_RENAME_MAP.items() if k in df.columns})
-
-def has_required_columns(df, required):
-    return all(col in df.columns for col in required)
+    df.rename(columns=COLUMN_RENAME_MAP, inplace=True)
+    return df
 
 if uploaded_files:
     data = {}
@@ -56,24 +52,27 @@ if uploaded_files:
         filename = file.name.lower()
         try:
             df = pd.read_csv(file)
-            df = normalize_columns(df)
+            df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
 
             if 'query' in filename:
-                df = rename_query_columns(df)
+                df = fix_query_file(df)
+
+                # Show debug info
+                st.caption("✅ Uploaded Queries.csv Columns:")
+                st.write(df.columns.tolist())
+
                 if 'ctr' in df.columns:
-                    df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
+                    df['ctr'] = df['ctr'].astype(str).str.rstrip('%').astype(float)
                 if 'position' in df.columns:
                     df['position'] = pd.to_numeric(df['position'], errors='coerce')
-                if has_required_columns(df, REQUIRED_QUERY_COLUMNS):
+
+                missing = [col for col in REQUIRED_QUERY_COLUMNS if col not in df.columns]
+                if not missing:
                     data['queries'] = df
                 else:
-                    st.warning("⚠️ 'Queries.csv' uploaded but does not contain required columns: 'query', 'clicks', 'impressions', 'ctr', 'position'")
+                    st.warning(f"⚠️ Queries.csv is missing columns: {missing}")
 
             elif 'page' in filename:
-                if 'ctr' in df.columns:
-                    df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
-                if 'position' in df.columns:
-                    df['position'] = pd.to_numeric(df['position'], errors='coerce')
                 data['pages'] = df
 
             elif 'country' in filename:
@@ -97,91 +96,61 @@ if uploaded_files:
         except Exception as e:
             st.warning(f"❌ Failed to load {file.name}: {e}")
 
+    # Now all visualizations based on uploaded files
     if 'queries' in data:
         queries = data['queries']
         st.header("📈 Overall Performance Metrics")
         try:
-            total_clicks = queries['clicks'].sum()
-            total_impressions = queries['impressions'].sum()
-            avg_ctr = queries['ctr'].mean()
-            avg_position = queries['position'].mean()
-
-            st.metric("Total Clicks", f"{total_clicks:,}")
-            st.metric("Total Impressions", f"{total_impressions:,}")
-            st.metric("Average CTR", f"{avg_ctr:.2f}%")
-            st.metric("Average Position", f"{avg_position:.2f}")
+            st.metric("Total Clicks", f"{queries['clicks'].sum():,}")
+            st.metric("Total Impressions", f"{queries['impressions'].sum():,}")
+            st.metric("Average CTR", f"{queries['ctr'].mean():.2f}%")
+            st.metric("Average Position", f"{queries['position'].mean():.2f}")
         except Exception as e:
             st.error(f"Error calculating metrics: {e}")
 
     if show_queries and 'queries' in data:
         st.header("🔎 Top Queries")
-        try:
-            top_queries = queries.sort_values(by='clicks', ascending=False).head(20)
-            st.dataframe(top_queries)
+        top_queries = queries.sort_values(by='clicks', ascending=False).head(20)
+        st.dataframe(top_queries)
 
-            st.subheader("CTR vs Position Scatter Plot")
-            fig = px.scatter(queries, x="position", y="ctr", size="impressions", hover_data=["query"], title="CTR vs Position")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Error rendering Top Queries chart: {e}")
+        st.subheader("CTR vs Position Scatter Plot")
+        fig = px.scatter(queries, x="position", y="ctr", size="impressions", hover_data=["query"], title="CTR vs Position")
+        st.plotly_chart(fig, use_container_width=True)
 
     if show_opportunities and 'queries' in data:
         st.subheader("🎯 Opportunity Queries (High Impressions, Low CTR)")
-        try:
-            opportunity = queries[(queries['impressions'] > queries['impressions'].quantile(0.75)) & (queries['ctr'] < queries['ctr'].median())]
-            st.dataframe(opportunity.sort_values(by='impressions', ascending=False))
-        except Exception as e:
-            st.warning(f"Error rendering Opportunity Queries: {e}")
+        opp_queries = queries[(queries['impressions'] > queries['impressions'].quantile(0.75)) & (queries['ctr'] < queries['ctr'].median())]
+        st.dataframe(opp_queries.sort_values(by='impressions', ascending=False))
 
     if show_devices and 'devices' in data:
         st.header("🖥️ Device Performance")
-        try:
-            devices = data['devices']
-            fig = px.pie(devices, names='device', values='clicks', title="Clicks by Device")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Error rendering Device Performance chart: {e}")
+        fig = px.pie(data['devices'], names='device', values='clicks', title="Clicks by Device")
+        st.plotly_chart(fig, use_container_width=True)
 
     if show_countries and 'countries' in data:
         st.header("🌍 Top Countries")
-        try:
-            countries = data['countries']
-            fig = px.bar(countries.sort_values(by='clicks', ascending=False).head(10),
-                         x='country', y='clicks', title="Top Countries by Clicks")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Error rendering Countries chart: {e}")
+        fig = px.bar(data['countries'].sort_values(by='clicks', ascending=False).head(10),
+                     x='country', y='clicks', title="Top Countries by Clicks")
+        st.plotly_chart(fig, use_container_width=True)
 
     if show_dates and 'dates' in data:
         st.header("🗓️ Clicks & Impressions Over Time")
-        try:
-            dates = data['dates']
-            fig = px.line(dates, x='date', y=['clicks', 'impressions'], title="Performance Over Time")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Error rendering Time Series chart: {e}")
+        fig = px.line(data['dates'], x='date', y=['clicks', 'impressions'], title="Performance Over Time")
+        st.plotly_chart(fig, use_container_width=True)
 
     if show_search_appearance and 'search_appearance' in data:
         st.header("🔎 Search Appearance Analysis")
-        try:
-            appearance = data['search_appearance']
-            fig = px.bar(appearance, x='search_appearance', y='clicks', title="Clicks by Search Appearance")
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception as e:
-            st.warning(f"Error rendering Search Appearance chart: {e}")
+        fig = px.bar(data['search_appearance'], x='search_appearance', y='clicks', title="Clicks by Search Appearance")
+        st.plotly_chart(fig, use_container_width=True)
 
     if show_clusters and 'queries' in data:
         st.header("🧠 Keyword Clustering (KMeans + TF-IDF)")
-        try:
-            vectorizer = TfidfVectorizer(stop_words='english')
-            X = vectorizer.fit_transform(queries['query'])
-            n_clusters = 5
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-            queries['cluster'] = kmeans.fit_predict(X)
+        vectorizer = TfidfVectorizer(stop_words='english')
+        X = vectorizer.fit_transform(queries['query'])
+        kmeans = KMeans(n_clusters=5, random_state=42)
+        queries['cluster'] = kmeans.fit_predict(X)
 
-            for i in range(n_clusters):
-                cluster_df = queries[queries['cluster'] == i]
-                st.subheader(f"Cluster {i+1} (Top keywords)")
-                st.dataframe(cluster_df[['query', 'clicks', 'impressions']].sort_values(by='clicks', ascending=False).head(10))
-        except Exception as e:
-            st.warning(f"Keyword clustering failed: {e}")
+        for cluster_id in sorted(queries['cluster'].unique()):
+            cluster_df = queries[queries['cluster'] == cluster_id]
+            st.subheader(f"Cluster {cluster_id + 1}")
+            st.dataframe(cluster_df[['query', 'clicks', 'impressions']].sort_values(by='clicks', ascending=False).head(10))
