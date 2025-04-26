@@ -31,10 +31,21 @@ Upload the following CSVs exported from Google Search Console:
 uploaded_files = st.file_uploader("Upload your GSC CSV files", type=['csv'], accept_multiple_files=True)
 
 REQUIRED_QUERY_COLUMNS = ['query', 'clicks', 'impressions', 'ctr', 'position']
+COLUMN_RENAME_MAP = {
+    'top queries': 'query',
+    'clicks': 'clicks',
+    'impressions': 'impressions',
+    'ctr': 'ctr',
+    'position': 'position'
+}
 
 def normalize_columns(df):
     df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
     return df
+
+def rename_query_columns(df):
+    df.columns = [col.strip().lower() for col in df.columns]
+    return df.rename(columns={k: v for k, v in COLUMN_RENAME_MAP.items() if k in df.columns})
 
 def has_required_columns(df, required):
     return all(col in df.columns for col in required)
@@ -48,6 +59,7 @@ if uploaded_files:
             df = normalize_columns(df)
 
             if 'query' in filename:
+                df = rename_query_columns(df)
                 if 'ctr' in df.columns:
                     df['ctr'] = df['ctr'].str.rstrip('%').astype(float)
                 if 'position' in df.columns:
